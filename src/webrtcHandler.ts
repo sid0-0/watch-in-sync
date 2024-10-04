@@ -1,5 +1,5 @@
 import room from "./room";
-import { createRoom } from "./supabaseHandler";
+import { createRoom, updateIceCandidates } from "./supabaseHandler";
 
 const servers = {
   iceServers: [
@@ -28,6 +28,14 @@ class WebRTC {
       const candidateData = event.candidate;
       this.iceCandidates[this.iceCandidateHashGenerator(candidateData)] =
         candidateData;
+
+      if (room.id && room.token) {
+        updateIceCandidates({
+          id: room.id,
+          token: room.token,
+          iceCandidates: Object.values(this.iceCandidates),
+        });
+      }
     };
     this.pc.oniceconnectionstatechange = (event) => {
       console.log(event);
@@ -55,7 +63,6 @@ class WebRTC {
 
   async createOffer() {
     if (!this.pc) return;
-    // this.generateIceCandidate();
     const dataChannel = this.pc.createDataChannel("test");
     console.log(dataChannel);
     dataChannel.onopen = () => {
@@ -80,13 +87,17 @@ class WebRTC {
     const { data, error } = await createRoom(roomData);
     if (!error) {
       room.setData(data);
+      await updateIceCandidates({
+        id: data.id,
+        token: data.token,
+        iceCandidates: Object.values(this.iceCandidates),
+      });
     }
     return offer;
   }
 
   async createAnswer(sessionDescription: RTCSessionDescriptionInit) {
     if (!this.pc) return;
-    // this.generateIceCandidate();
     const offerDescription = new RTCSessionDescription(sessionDescription);
     this.pc.setRemoteDescription(offerDescription);
     const answer = await this.pc.createAnswer();
