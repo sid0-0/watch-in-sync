@@ -1,3 +1,6 @@
+import room from "./room";
+import { createRoom } from "./supabaseHandler";
+
 const servers = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -13,7 +16,6 @@ const servers = {
   ],
   iceCandidatePoolSize: 10,
 };
-
 class WebRTC {
   pc: RTCPeerConnection | null = null;
   iceCandidates: Record<string, RTCIceCandidateInit> = {};
@@ -26,7 +28,6 @@ class WebRTC {
       const candidateData = event.candidate;
       this.iceCandidates[this.iceCandidateHashGenerator(candidateData)] =
         candidateData;
-      console.log(Object.values(this.iceCandidates));
     };
     this.pc.oniceconnectionstatechange = (event) => {
       console.log(event);
@@ -43,7 +44,6 @@ class WebRTC {
     const candidates = Array.isArray(iceCandidates)
       ? iceCandidates
       : [iceCandidates];
-    console.log(candidates);
     await Promise.all(
       candidates.map(async (candidate) => {
         if (!this.pc) return null;
@@ -72,6 +72,15 @@ class WebRTC {
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
     this.createdOffer = true;
+    const roomData = {
+      sdpOffer: offer,
+      iceCandidates: Object.values(this.iceCandidates),
+      token: "test",
+    };
+    const { data, error } = await createRoom(roomData);
+    if (!error) {
+      room.setData(data);
+    }
     return offer;
   }
 
