@@ -1,5 +1,5 @@
 import room from "./room";
-import { createRoom, updateIceCandidates } from "./supabaseHandler";
+import { updateIceCandidates } from "./supabaseHandler";
 
 const servers = {
   iceServers: [
@@ -16,10 +16,12 @@ const servers = {
   ],
   iceCandidatePoolSize: 10,
 };
+
 class WebRTC {
   pc: RTCPeerConnection | null = null;
   iceCandidates: Record<string, RTCIceCandidateInit> = {};
   createdOffer: boolean = false;
+  dataChannels: RTCDataChannel[] = [];
 
   constructor() {
     this.pc = new RTCPeerConnection(servers);
@@ -55,44 +57,32 @@ class WebRTC {
     await Promise.all(
       candidates.map(async (candidate) => {
         if (!this.pc) return null;
+        const hash = this.iceCandidateHashGenerator(candidate);
+        if (this.iceCandidates[hash]) return null;
         const addCandy = await this.pc.addIceCandidate(candidate);
+        this.iceCandidates[hash] = candidate;
         return addCandy;
       })
     );
   }
 
   async createOffer() {
-    if (!this.pc) return;
+    if (!this.pc) return null;
     const dataChannel = this.pc.createDataChannel("test");
-    console.log(dataChannel);
-    dataChannel.onopen = () => {
-      console.log("dataChannel opened");
-    };
-    dataChannel.onmessage = (event) => {
-      console.log("dataChannel message", event);
-    };
     setInterval(() => {
       if (dataChannel.readyState !== "open") return;
-      console.log("sending");
-      dataChannel.send("Hello from the sender");
+      dataChannel.send("marco");
     }, 2000);
+
+    dataChannel.addEventListener("message", (event) => {
+      const message = event.data;
+      console.log("dataChannel received:", message);
+      if (message === "marco") dataChannel.send("polo");
+    });
+
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
     this.createdOffer = true;
-    const roomData = {
-      sdpOffer: offer,
-      iceCandidates: Object.values(this.iceCandidates),
-      token: "test",
-    };
-    const { data, error } = await createRoom(roomData);
-    if (!error) {
-      room.setData(data);
-      await updateIceCandidates({
-        id: data.id,
-        token: data.token,
-        iceCandidates: Object.values(this.iceCandidates),
-      });
-    }
     return offer;
   }
 
@@ -102,16 +92,20 @@ class WebRTC {
     this.pc.setRemoteDescription(offerDescription);
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
+    return answer;
+  }
+
+  registerWebRTCConfirmationListeners() {
+    if (!this.pc) return;
     this.pc.addEventListener("datachannel", (event) => {
       const dataChannel = event.channel;
-      dataChannel.onopen = () => {
-        console.log("dataChannel opened");
-      };
-      dataChannel.onmessage = (event) => {
-        console.log("dataChannel message", event);
-      };
+      this.dataChannels.push(dataChannel);
+      dataChannel.addEventListener("message", (event) => {
+        const message = event.data;
+        console.log("dataChannel received:", message);
+        if (message === "marco") dataChannel.send("polo");
+      });
     });
-    return answer;
   }
 
   async acceptAnswer(answer: RTCSessionDescriptionInit) {

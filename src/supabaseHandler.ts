@@ -76,11 +76,9 @@ export const createRoom = async (roomData: {
   };
 };
 
-export const getRoom = (params: { roomId: number; token: string }) => {
-  const { roomId, token } = params;
-  return supabase
-    .rpc("get_rom", { id: roomId, token: token })
-    .then(formatRoomDataResponse);
+export const getRoom = (params: { id: number; token: string }) => {
+  const { id, token } = params;
+  return supabase.rpc("get_room", { id, token }).then(formatRoomDataResponse);
 };
 
 export const updateIceCandidates = (params: {
@@ -96,4 +94,13 @@ export const updateIceCandidates = (params: {
       ice_candidates: iceCandidates,
     })
     .then(formatRoomDataResponse);
+};
+
+export const sendSdpAnswer = (params: {
+  id: number;
+  token: string;
+  answer: RTCSessionDescriptionInit;
+}) => {
+  const { id, token, answer } = params;
+  return supabase.rpc("send_offer_answer", { id, token, answer });
 };
