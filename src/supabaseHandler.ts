@@ -1,5 +1,10 @@
-import { createClient, PostgrestSingleResponse } from "@supabase/supabase-js";
+import {
+  createClient,
+  PostgrestSingleResponse,
+  RealtimePostgresChangesPayload,
+} from "@supabase/supabase-js";
 import { RoomData } from "./room";
+import { throttle } from "./utils";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseKey = import.meta.env.VITE_SUPABASE_KEY as string;
@@ -96,6 +101,8 @@ export const updateIceCandidates = (params: {
     .then(formatRoomDataResponse);
 };
 
+export const throttledUpdateIceCandidates = throttle(updateIceCandidates, 1000);
+
 export const sendSdpAnswer = (params: {
   id: number;
   token: string;
@@ -103,4 +110,27 @@ export const sendSdpAnswer = (params: {
 }) => {
   const { id, token, answer } = params;
   return supabase.rpc("send_offer_answer", { id, token, answer });
+};
+
+export const subscribeToSdpAnswers = (
+  roomId: number,
+  callback: (
+    payload: RealtimePostgresChangesPayload<{
+      sdp_answer: RTCSessionDescriptionInit;
+    }>
+  ) => void
+) => {
+  return supabase
+    .channel("answers-db-changes")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "answers",
+        filter: `room_id=eq.${roomId}`,
+      },
+      callback
+    )
+    .subscribe();
 };

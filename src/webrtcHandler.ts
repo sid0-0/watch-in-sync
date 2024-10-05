@@ -1,6 +1,3 @@
-import room from "./room";
-import { updateIceCandidates } from "./supabaseHandler";
-
 const servers = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -19,51 +16,30 @@ const servers = {
 
 class WebRTC {
   pc: RTCPeerConnection | null = null;
-  iceCandidates: Record<string, RTCIceCandidateInit> = {};
   createdOffer: boolean = false;
   dataChannels: RTCDataChannel[] = [];
 
   constructor() {
     this.pc = new RTCPeerConnection(servers);
-    this.pc.onicecandidate = (event) => {
-      if (event.candidate === null) return;
-      const candidateData = event.candidate;
-      this.iceCandidates[this.iceCandidateHashGenerator(candidateData)] =
-        candidateData;
-
-      if (room.id && room.token) {
-        updateIceCandidates({
-          id: room.id,
-          token: room.token,
-          iceCandidates: Object.values(this.iceCandidates),
-        });
-      }
-    };
     this.pc.oniceconnectionstatechange = (event) => {
       console.log(event);
     };
   }
 
-  iceCandidateHashGenerator(candidate: RTCIceCandidateInit) {
-    return `${candidate.candidate}#${candidate.sdpMid}#${candidate.sdpMLineIndex}`;
+  registerIceCandidateCallback(
+    callback: (candidate: RTCIceCandidateInit) => void
+  ) {
+    if (!this.pc) return;
+    this.pc.onicecandidate = (event) => {
+      if (event.candidate === null) return;
+      const candidateData = event.candidate;
+      callback(candidateData);
+    };
   }
 
-  async addIceCandidates(
-    iceCandidates: RTCIceCandidateInit[] | RTCIceCandidateInit
-  ) {
-    const candidates = Array.isArray(iceCandidates)
-      ? iceCandidates
-      : [iceCandidates];
-    await Promise.all(
-      candidates.map(async (candidate) => {
-        if (!this.pc) return null;
-        const hash = this.iceCandidateHashGenerator(candidate);
-        if (this.iceCandidates[hash]) return null;
-        const addCandy = await this.pc.addIceCandidate(candidate);
-        this.iceCandidates[hash] = candidate;
-        return addCandy;
-      })
-    );
+  addIceCandidate(candidate: RTCIceCandidateInit) {
+    if (!this.pc) return null;
+    return this.pc.addIceCandidate(candidate);
   }
 
   async createOffer() {
